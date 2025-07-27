@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     netcat-traditional \
+    bash \
+    dos2unix \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -16,7 +19,8 @@ COPY . .
 RUN mkdir -p logs backups
 
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    dos2unix /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8000
 
