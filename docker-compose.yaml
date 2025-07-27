@@ -1,0 +1,128 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - saber-api
+    networks:
+      - saber-network
+    restart: unless-stopped
+
+  saber-api:
+    build: .
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/saber_build_system}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379}
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ./config:/app/config:ro
+    networks:
+      - saber-network
+    restart: unless-stopped
+
+  saber-worker:
+    build: .
+    command: celery -A app.infrastructure.tasks.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=saber_build_system
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/saber_build_system
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - saber-network
+    restart: unless-stopped
+
+  saber-beat:
+    build: .
+    command: celery -A app.infrastructure.tasks.celery_app beat --loglevel=info
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=saber_build_system
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/saber_build_system
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - saber-network
+    restart: unless-stopped
+
+  flower:
+    build: .
+    command: celery -A app.infrastructure.tasks.celery_app flower --port=5555
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=saber_build_system
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - saber-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=saber_build_system
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - saber-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    networks:
+      - saber-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  saber-network:
+    driver: bridge
+    internal: false
