@@ -7,7 +7,7 @@ from .schemas import (
     TaskCreateRequest,
     TaskUpdateRequest,
     TaskResponse,
-    TaskListResponse,,
+    TaskListResponse,
 )
 from app.core.auth.entities import User
 from app.core.domain.entities import Task
